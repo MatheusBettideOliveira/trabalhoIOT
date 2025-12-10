@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Estacionamento Inteligente - IoT</title>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #667eea;
+            --primary-dark: #4c51bf;
+            --secondary: #764ba2;
+            --success: #48bb78;
+            --success-dark: #2f855a;
+            --danger: #f56565;
+            --danger-dark: #c53030;
+            --warning: #f6ad55;
+            --warning-dark: #c05621;
+            --text-main: #2d3748;
+            --text-muted: #718096;
+            --card-bg: rgba(255, 255, 255, 0.96);
+            --blur-bg: rgba(255, 255, 255, 0.85);
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+            color: var(--text-main);
+            background:
+                radial-gradient(circle at top left, rgba(255,255,255,0.18), transparent 55%),
+                radial-gradient(circle at bottom right, rgba(0,0,0,0.35), transparent 60%),
+                linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            display: flex;
+            align-items: stretch;
+            justify-content: center;
+        }
+
+        .page-wrapper {
+            width: 100%;
+            max-width: 1280px;
+            padding: 20px;
+        }
+
+        .container {
+            background: radial-gradient(circle at top left, rgba(255,255,255,0.3), rgba(255,255,255,0.05));
+            border-radius: 24px;
+            padding: 18px;
+            backdrop-filter: blur(18px);
+            box-shadow:
+                0 24px 60px rgba(0, 0, 0, 0.32),
+                0 0 0 1px rgba(255, 255, 255, 0.08);
+        }
+
+        
+
+        .top-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 18px;
+        }
+
+        .header-main {
+            background: var(--card-bg);
+            padding: 18px 22px;
+            border-radius: 18px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px 18px;
+            box-shadow: 0 14px 40px rgba(0,0,0,0.12);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header-main::before {
+            content: '';
+            position: absolute;
+            right: -40px;
+            top: -40px;
+            width: 140px;
+            height: 140px;
+            background: radial-gradient(circle, rgba(102,126,234,0.3), transparent 70%);
+            opacity: 0.9;
+        }
+
+        .header-title-block {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            z-index: 1;
+        }
+
+        .header-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 24px;
+            box-shadow: 0 8px 24px rgba(76,81,191,0.45);
+        }
+
+        .header-text h1 {
+            color: #1a202c;
+            margin-bottom: 4px;
+            font-size: 1.7rem;
+            letter-spacing: 0.02em;
+        }
+
+        .header-text p {
+            color: var(--text-muted);
+            font-size: 0.92rem;
+        }
+
+        .header-meta {
+            margin-left: auto;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 6px;
+            z-index: 1;
+        }
+
+        .iot-badge {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            padding: 6px 16px;
+            border-radius: 999px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 10px 24px rgba(118,75,162,0.4);
+        }
+
+        .iot-badge span {
+            font-size: 0.85rem;
+        }
+
+        .sub-badge {
+            background: rgba(113, 128, 150, 0.08);
+            color: var(--text-muted);
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .sub-badge-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: rgba(72, 187, 120, 0.9);
+        }
+
+        
+
+        .status-cards {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 18px;
+            margin-bottom: 20px;
+        }
+
+        .status-card {
+            background: var(--card-bg);
+            padding: 16px 18px 14px;
+            border-radius: 18px;
+            text-align: left;
+            box-shadow: 0 16px 36px rgba(0, 0, 0, 0.16);
+            transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease, background 0.25s ease;
+            border: 1px solid rgba(226, 232, 240, 0.9);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .status-card::after {
+            content: '';
+            position: absolute;
+            right: -40px;
+            bottom: -40px;
+            width: 120px;
+            height: 120px;
+            border-radius: 999px;
+            opacity: 0.12;
+        }
+
+        .status-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 20px 42px rgba(0, 0, 0, 0.24);
+        }
+
+        .status-label {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            margin-bottom: 6px;
+            color: var(--text-muted);
+        }
+
+        .status-card h3 {
+            margin-bottom: 4px;
+            color: var(--text-main);
+            font-size: 0.95rem;
+        }
+
+        .status-main {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            margin-top: 4px;
+        }
+
+        .status-card .number {
+            font-size: 2.2rem;
+            font-weight: 700;
+        }
+
+        .status-caption {
+            font-size: 0.86rem;
+            color: var(--text-muted);
+        }
+
+        .status-chip {
+            font-size: 0.72rem;
+            padding: 3px 8px;
+            border-radius: 999px;
+            border: 1px solid rgba(160, 174, 192, 0.7);
+            color: var(--text-muted);
+            margin-top: 4px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .chip-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: rgba(160, 174, 192, 1);
+        }
+
+        .total {
+            border-top: 4px solid #4299e1;
+        }
+        .total .number { color: #2b6cb0; }
+        .total::after {
+            background: radial-gradient(circle, rgba(66,153,225,0.9), transparent 70%);
+        }
+
+        .free {
+            border-top: 4px solid var(--success);
+        }
+        .free .number { color: var(--success-dark); }
+        .free::after {
+            background: radial-gradient(circle, rgba(72,187,120,0.95), transparent 70%);
+        }
+
+        .occupied {
+            border-top: 4px solid var(--danger);
+        }
+        .occupied .number { color: var(--danger-dark); }
+        .occupied::after {
+            background: radial-gradient(circle, rgba(245,101,101,0.95), transparent 70%);
+        }
+
+        
+
+        .layout-main {
+            display: grid;
+            gap: 18px;
+            grid-template-columns: 2.6fr 1.4fr;
+        }
+
+        .parking-grid {
+            background: var(--card-bg);
+            padding: 18px 18px 16px;
+            border-radius: 18px;
+            box-shadow: 0 16px 36px rgba(0, 0, 0, 0.18);
+            border: 1px solid rgba(226,232,240,0.9);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .parking-grid::before {
+            content: '';
+            position: absolute;
+            left: -40px;
+            top: -40px;
+            width: 120px;
+            height: 120px;
+            background: radial-gradient(circle, rgba(118,75,162,0.12), transparent 70%);
+        }
+
+        .parking-grid-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 12px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .parking-grid-title {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .parking-grid h2 {
+            margin: 0;
+            color: #1a202c;
+            font-size: 1.05rem;
+        }
+
+        .parking-grid-subtitle {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        .legend {
+            display: inline-flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: rgba(247, 250, 252, 0.9);
+        }
+
+        .legend-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.78rem;
+            color: var(--text-muted);
+        }
+
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 4px;
+        }
+
+        .legend-color.free {
+            background: linear-gradient(135deg, var(--success), var(--success-dark));
+        }
+
+        .legend-color.occupied {
+            background: linear-gradient(135deg, var(--danger), var(--danger-dark));
+        }
+
+        .legend-color.unknown {
+            background: linear-gradient(135deg, var(--warning), var(--warning-dark));
+        }
+
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+            margin-bottom: 4px;
+        }
+
+        .parking-spot {
+            aspect-ratio: 2.2 / 1;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            color: white;
+            font-size: 0.9em;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.26);
+            transform: translateY(0);
+            transition: transform 0.22s ease, box-shadow 0.22s ease, opacity 0.22s ease, filter 0.22s ease;
+        }
+
+        .parking-spot::before {
+            content: '';
+            position: absolute;
+            left: -35%;
+            top: -20%;
+            width: 75%;
+            height: 28%;
+            background: rgba(255, 255, 255, 0.25);
+            transform: rotate(-12deg);
+            pointer-events: none;
+        }
+
+        .parking-spot.free {
+            background: radial-gradient(circle at 10% 0, #9ae6b4, transparent 55%), 
+                        linear-gradient(135deg, var(--success), var(--success-dark));
+            border: 2px solid var(--success-dark);
+        }
+
+        .parking-spot.occupied {
+            background: radial-gradient(circle at 10% 0, #fed7d7, transparent 55%), 
+                        linear-gradient(135deg, var(--danger), var(--danger-dark));
+            border: 2px solid var(--danger-dark);
+        }
+
+        .parking-spot.unknown {
+            background: radial-gradient(circle at 10% 0, #feebc8, transparent 55%), 
+                        linear-gradient(135deg, var(--warning), var(--warning-dark));
+            border: 2px solid var(--warning-dark);
+            animation: pulse-unknown 2s infinite;
+        }
+
+        @keyframes pulse-unknown {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+
+        .parking-spot:hover {
+            transform: translateY(-4px) scale(1.02);
+            box-shadow: 0 16px 32px rgba(0,0,0,0.35);
+            filter: brightness(1.05);
+            z-index: 10;
+        }
+
+        
+
+        .side-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .connection-status {
+            background: var(--card-bg);
+            padding: 16px 18px;
+            border-radius: 18px;
+            text-align: left;
+            box-shadow: 0 16px 36px rgba(0, 0, 0, 0.18);
+            border: 1px solid rgba(226,232,240,0.9);
+        }
+
+        .connection-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 6px;
+        }
+
+        .connection-title {
+            font-size: 0.96rem;
+            color: #1a202c;
+            font-weight: 600;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 13px;
+            height: 13px;
+            border-radius: 50%;
+            margin-right: 4px;
+            box-shadow: 0 0 0 3px rgba(72, 187, 120, 0.18);
+            animation: pulse 2s infinite;
+        }
+
+        .status-indicator.connected {
+            background-color: var(--success);
+        }
+
+        .status-indicator.disconnected {
+            background-color: var(--danger);
+            box-shadow: 0 0 0 3px rgba(245, 101, 101, 0.2);
+        }
+
+        .connection-text {
+            font-size: 0.87rem;
+            color: var(--text-muted);
+        }
+
+        .status-line {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.05); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+
+        .last-update {
+            margin-top: 8px;
+            font-size: 0.82rem;
+            color: var(--text-muted);
+        }
+
+        .mini-metrics {
+            margin-top: 10px;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 6px;
+        }
+
+        .mini-metric {
+            background: rgba(247, 250, 252, 0.9);
+            border-radius: 12px;
+            padding: 6px 8px;
+            font-size: 0.75rem;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .mini-label {
+            color: var(--text-muted);
+        }
+
+        .mini-value {
+            font-weight: 600;
+            color: var(--text-main);
+        }
+
+        
+
+        @media (max-width: 992px) {
+            .layout-main {
+                grid-template-columns: 1fr;
+            }
+
+            .side-panel {
+                flex-direction: row;
+            }
+
+            .connection-status {
+                flex: 1;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .page-wrapper {
+                padding: 12px;
+            }
+
+            .container {
+                padding: 14px;
+                border-radius: 18px;
+            }
+
+            .top-bar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .header-main {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .header-meta {
+                align-items: flex-start;
+                margin-left: 0;
+            }
+
+            .status-cards {
+                grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+            }
+
+            .grid-container {
+                grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));
+                gap: 8px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .status-cards {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="page-wrapper">
+    <div class="container">
+        <div class="top-bar">
+            <div class="header-main">
+                <div class="header-title-block">
+                    <div class="header-icon">🚗</div>
+                    <div class="header-text">
+                        <h1>Sistema de Estacionamento Inteligente</h1>
+                        <p>Monitoramento em tempo real das vagas do estacionamento</p>
+                    </div>
+                </div>
+                <div class="header-meta">
+                    <div class="iot-badge">
+                        <span>IoT • MQTT + REST</span>
+                    </div>
+                    <div class="sub-badge">
+                        <span class="sub-badge-dot"></span>
+                        <span>Painel ativo em tempo real</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="status-cards">
+            <div class="status-card total">
+                <div class="status-label">Visão Geral</div>
+                <h3>Total de Vagas</h3>
+                <div class="status-main">
+                    <div class="number" id="total-spots">-</div>
+                    <div class="status-caption">Vagas cadastradas</div>
+                </div>
+                <div class="status-chip">
+                    <span class="chip-dot"></span>
+                    <span>Capacidade máxima do estacionamento</span>
+                </div>
+            </div>
+
+            <div class="status-card free">
+                <div class="status-label">Disponibilidade</div>
+                <h3>Vagas Livres</h3>
+                <div class="status-main">
+                    <div class="number" id="free-spots">-</div>
+                    <div class="status-caption">Disponíveis</div>
+                </div>
+                <div class="status-chip">
+                    <span class="chip-dot"></span>
+                    <span>Prontas para receber veículos</span>
+                </div>
+            </div>
+
+            <div class="status-card occupied">
+                <div class="status-label">Ocupação</div>
+                <h3>Vagas Ocupadas</h3>
+                <div class="status-main">
+                    <div class="number" id="occupied-spots">-</div>
+                    <div class="status-caption">Indisponíveis</div>
+                </div>
+                <div class="status-chip">
+                    <span class="chip-dot"></span>
+                    <span>Veículos estacionados no momento</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="layout-main">            
+            <div class="parking-grid">
+                <div class="parking-grid-header">
+                    <div class="parking-grid-title">
+                        <h2>Mapa de Vagas em Tempo Real</h2>
+                        <span class="parking-grid-subtitle">
+                            Visualização dinâmica das vagas monitoradas
+                        </span>
+                    </div>
+                    <div class="legend">
+                        <div class="legend-item">
+                            <span class="legend-color free"></span>
+                            <span>Livre</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-color occupied"></span>
+                            <span>Ocupada</span>
+                        </div>
+                        <div class="legend-item">
+                            <span class="legend-color unknown"></span>
+                            <span>Instável</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="grid-container" id="parking-grid">                    
+                </div>
+            </div>
+            
+            <div class="side-panel">
+                <div class="connection-status">
+                    <div class="connection-header">
+                        <div class="status-line">
+                            <span class="status-indicator disconnected" id="connection-indicator"></span>
+                            <span class="connection-title">Status da Conexão</span>
+                        </div>
+                    </div>
+                    <div class="connection-text" id="connection-text">
+                        Conectando ao servidor MQTT...
+                    </div>
+                    <div class="last-update" id="last-update">
+                        Última atualização: Aguardando dados...
+                    </div>
+
+                    <div class="mini-metrics">
+                        <div class="mini-metric">
+                            <span class="mini-label">Protocolo</span>
+                            <span class="mini-value">MQTT / WebSocket</span>
+                        </div>
+                        <div class="mini-metric">
+                            <span class="mini-label">Fallback</span>
+                            <span class="mini-value">API REST / polling</span>
+                        </div>
+                        <div class="mini-metric">
+                            <span class="mini-label">Atualização visual</span>
+                            <span class="mini-value">a cada 3s (mín.)</span>
+                        </div>
+                        <div class="mini-metric">
+                            <span class="mini-label">Fonte de dados</span>
+                            <span class="mini-value">parking/update ou /api/status</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+    // Configuração MQTT - Usando fallback para polling via API
+    const USE_MQTT_WEBSOCKET = true; // Desabilitado - requer configuração adicional
+    const MQTT_BROKER = 'ws://localhost:9001';  // WebSocket MQTT
+    const MQTT_TOPIC_STATUS = 'parking/status';
+    const MQTT_TOPIC_SPOT = 'parking/spot/+';
+    const MQTT_TOPIC_UPDATE = 'parking/update';
+
+    let client;
+    let parkingData = {
+        total_spots: 0,
+        free_spots: 0,
+        occupied_spots: 0,
+        spots: {}
+    };
+
+    // Controle de atualização visual
+    let lastVisualUpdate = 0;
+    const VISUAL_UPDATE_INTERVAL = 3000; // 3 segundos entre atualizações visuais
+
+    // Função com throttling para atualizações visuais
+    function throttledUpdateDisplay() {
+        const now = Date.now();
+        if (now - lastVisualUpdate > VISUAL_UPDATE_INTERVAL) {
+            updateDisplay();
+            lastVisualUpdate = now;
+        }
+    }
+
+    // Conectar ao MQTT
+    function connectMQTT() {
+        try {
+            client = mqtt.connect(MQTT_BROKER);
+
+            client.on('connect', function() {
+                console.log('MQTT conectado!');
+                updateConnectionStatus(true);
+
+                // Inscrever apenas no tópico principal
+                client.subscribe(MQTT_TOPIC_UPDATE);
+            });
+
+            client.on('message', function(topic, message) {
+                try {
+                    const payload = JSON.parse(message.toString());
+                    // Processar apenas update completo (único tópico)
+                    if (topic === MQTT_TOPIC_UPDATE) {
+                        parkingData.total_spots = payload.total_spots;
+                        parkingData.free_spots = payload.free_spots;
+                        parkingData.occupied_spots = payload.occupied_spots;
+                        parkingData.spots = payload.spots;
+
+                        // Atualizar display com rate limiting
+                        throttledUpdateDisplay();
+                    }
+
+                    updateLastUpdate();
+                } catch (error) {
+                    // Log mínimo de erros
+                    if (error.message !== 'Unexpected end of JSON input') {
+                        console.error('Erro MQTT:', error.message);
+                    }
+                }
+            });
+
+            client.on('error', function(error) {
+                console.error('Erro de conexão MQTT:', error);
+                updateConnectionStatus(false);
+            });
+
+            client.on('close', function() {
+                console.log('Conexão MQTT fechada');
+                updateConnectionStatus(false);
+            });
+
+        } catch (error) {
+            console.error('Erro ao conectar MQTT:', error);
+            updateConnectionStatus(false);
+        }
+    }
+
+    // Atualizar status da conexão
+    function updateConnectionStatus(connected) {
+        const indicator = document.getElementById('connection-indicator');
+        const text = document.getElementById('connection-text');
+
+        if (connected) {
+            indicator.className = 'status-indicator connected';
+            if (USE_MQTT_WEBSOCKET) {
+                text.textContent = 'Conectado ao servidor MQTT (WebSocket)';
+            } else {
+                text.textContent = 'Conectado';
+            }
+        } else {
+            indicator.className = 'status-indicator disconnected';
+            text.textContent = 'Desconectado';
+        }
+    }
+
+    // Atualizar display principal
+    function updateDisplay() {
+        document.getElementById('total-spots').textContent = parkingData.total_spots;
+        document.getElementById('free-spots').textContent = parkingData.free_spots;
+        document.getElementById('occupied-spots').textContent = parkingData.occupied_spots;
+
+        // Criar grid de vagas se necessário
+        createParkingGrid();
+    }
+
+    // Criar grid de vagas
+    function createParkingGrid() {
+        const grid = document.getElementById('parking-grid');
+
+        if (parkingData.total_spots === 0) return;
+
+        // Limpar grid existente
+        grid.innerHTML = '';
+
+        // Criar vagas
+        for (let i = 0; i < parkingData.total_spots; i++) {
+            const spotId = `spot_${String(i).padStart(2, '0')}`;
+            const spot = document.createElement('div');
+            spot.className = 'parking-spot unknown';
+            spot.id = spotId;
+            spot.textContent = spotId.replace('spot_', 'V');
+            grid.appendChild(spot);
+        }
+
+        // Atualizar status das vagas
+        Object.keys(parkingData.spots).forEach(spotId => {
+            updateSpotDisplay(spotId, parkingData.spots[spotId]);
+        });
+    }
+
+    // Atualizar display de uma vaga específica
+    function updateSpotDisplay(spotId, spotData) {
+        const spotElement = document.getElementById(spotId);
+        if (!spotElement) return;
+
+        spotElement.className = `parking-spot ${spotData.status}`;
+
+        // Adicionar tooltip
+        let statusText = 'Desconhecido';
+        if (spotData.status === 'free') statusText = 'Livre';
+        else if (spotData.status === 'occupied') statusText = 'Ocupada';
+        else if (spotData.status === 'unknown') statusText = 'Instável';
+
+        spotElement.title = `${spotId.replace('spot_', 'Vaga ')} - ${statusText} (Count: ${spotData.count})`;
+    }
+
+    // Atualizar timestamp da última atualização
+    function updateLastUpdate() {
+        const now = new Date();
+        const timeString = now.toLocaleTimeString('pt-BR');
+        document.getElementById('last-update').textContent = `Última atualização: ${timeString}`;
+    }
+
+    // Iniciar conexão quando a página carregar
+    document.addEventListener('DOMContentLoaded', function() {
+        // Resetar timer de atualização visual para primeira atualização
+        lastVisualUpdate = 0;
+
+        if (USE_MQTT_WEBSOCKET) {
+            connectMQTT();
+        } else {
+            // Usar fallback via API REST polling
+            console.log('Usando fallback API REST para atualizações');
+            updateConnectionStatus(true);
+            setInterval(fallbackUpdate, 1000); // Atualizar a cada 1 segundo
+            fallbackUpdate(); // Primeira atualização imediata
+        }
+    });
+
+    // Fallback: atualizar via API REST se MQTT falhar
+    function fallbackUpdate() {
+        fetch('/api/status')
+            .then(response => response.json())
+            .then(data => {
+                parkingData = data;
+                throttledUpdateDisplay();
+                updateLastUpdate();
+            })
+            .catch(error => {
+                console.error('Erro na atualização via API:', error);
+            });
+    }
+</script>
+</body>
+</html>
